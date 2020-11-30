@@ -1,0 +1,23 @@
+{
+	"name":	"jahan/database",
+	"type": "library",
+	"homepage": "https://github.com/seanjahanpour/database",
+	"license": "MIT",
+	"authors": [
+		{
+			"name": "Sean Jahanpour",
+			"email": "sean@jahanpour.com"
+		}
+	],
+	"description": "",
+	"require": {
+		"php": ">7.2",
+		"jahan/filter": ">=1.0",
+		"jahan/interfaces": ">1.0.0"
+	},
+	"autoload": {
+		"psr-4": {
+			"Jahan\\Database\\":"src/"
+		}
+	}
+}
