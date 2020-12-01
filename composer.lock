@@ -1,0 +1,131 @@
+{
+    "_readme": [
+        "This file locks the dependencies of your project to a known state",
+        "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
+        "This file is @generated automatically"
+    ],
+    "content-hash": "9423e11d13fabc98bdf3a75da2ae1281",
+    "packages": [
+        {
+            "name": "jahan/collections",
+            "version": "1.0.0",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/seanjahanpour/collections.git",
+                "reference": "5c21e11ef4bef77c84b132140947f7387c291225"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/seanjahanpour/collections/zipball/5c21e11ef4bef77c84b132140947f7387c291225",
+                "reference": "5c21e11ef4bef77c84b132140947f7387c291225",
+                "shasum": ""
+            },
+            "require": {
+                "php": ">7.2"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "Jahan\\Collections\\": "src/"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Sean Jahanpour",
+                    "email": "sean@jahanpour.com"
+                }
+            ],
+            "description": "Set of collection for use by other libraries",
+            "homepage": "https://github.com/seanjahanpour/collections",
+            "time": "2020-11-17T22:11:16+00:00"
+        },
+        {
+            "name": "jahan/filter",
+            "version": "1.0.0",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/seanjahanpour/filter.git",
+                "reference": "22e981100eaf4c6d5b799f438bef0d889abbb45b"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/seanjahanpour/filter/zipball/22e981100eaf4c6d5b799f438bef0d889abbb45b",
+                "reference": "22e981100eaf4c6d5b799f438bef0d889abbb45b",
+                "shasum": ""
+            },
+            "require": {
+                "jahan/collections": ">=1.0",
+                "php": ">7.2"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "Jahan\\Filter\\": "src/"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Sean Jahanpour",
+                    "email": "sean@jahanpour.com"
+                }
+            ],
+            "description": "Filter library for PHP",
+            "homepage": "https://github.com/seanjahanpour/filter",
+            "time": "2020-11-17T22:35:07+00:00"
+        },
+        {
+            "name": "jahan/interfaces",
+            "version": "1.0.1",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/seanjahanpour/interfaces.git",
+                "reference": "46c988b3c20f6e016d9ecdfae20072a7cc54b91b"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/seanjahanpour/interfaces/zipball/46c988b3c20f6e016d9ecdfae20072a7cc54b91b",
+                "reference": "46c988b3c20f6e016d9ecdfae20072a7cc54b91b",
+                "shasum": ""
+            },
+            "require": {
+                "php": ">7.2"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "Jahan\\Interfaces\\": "src/"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Sean Jahanpour",
+                    "email": "sean@jahanpour.com"
+                }
+            ],
+            "homepage": "https://github.com/seanjahanpour/interfaces",
+            "time": "2020-11-19T19:08:32+00:00"
+        }
+    ],
+    "packages-dev": [],
+    "aliases": [],
+    "minimum-stability": "stable",
+    "stability-flags": [],
+    "prefer-stable": false,
+    "prefer-lowest": false,
+    "platform": {
+        "php": ">7.2"
+    },
+    "platform-dev": []
+}
