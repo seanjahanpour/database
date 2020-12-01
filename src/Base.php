@@ -8,8 +8,10 @@ use PDOStatement;
 class Base
 {
 	protected $error_handler;
+	protected bool $handler;
 	protected array $write_db_creds;
 	protected array $read_db_creds;
+	protected array $cache = [];
 
 	/**
 	 * 
@@ -20,8 +22,15 @@ class Base
 	 * 		'dsn' 	=> 'mysql:host=123.123.123.123;dbname=my_database;charset=utf8mb4',
 	 * 		'user'	=> 'root',
 	 * 		'password' => 'secret',
-	 * 		'fetch_object' => false,
+	 * 		'options' => [\PDO::ATTR_DEFAULT_FETCH_MODE => \PDO::FETCH_OBJ,\PDO::ATTR_EMULATE_PREPARES => false],
 	 * 		]
+	 * 	Recommended pdo options:
+	 * 		'options' => [
+	 * 			\PDO::ATTR_EMULATE_PREPARES => false,
+	 * 			\PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION,
+	 * 			\PDO::ATTR_DEFAULT_FETCH_MODE => \PDO::FETCH_OBJ
+	 * 			]
+	 * 	
 	 * @param array $read_db_creds same as $write_db_creds. Same credentials can be used.
 	 * @param callable|null $error_handler
 	 */
@@ -31,6 +40,19 @@ class Base
 		$this->handler = (empty($error_handler)) ? false : true;
 		$this->write_db_creds = $write_db_creds;
 		$this->read_db_creds = $read_db_creds;
+
+		$options = [
+			PDO::ATTR_EMULATE_PREPARES => false,
+			PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+			PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_OBJ
+		];
+
+		if(empty($this->write_db_creds['options'])) {
+			$this->write_db_creds['options'] = $options;
+		}
+		if(empty($this->read_db_creds['options'])) {
+			$this->read_db_creds['options'] = $options;
+		}
 	}
 
 	public function get_row(string $query, array $params = []) :array
@@ -153,14 +175,7 @@ class Base
 			$settings = $this->write_db_creds;		
 		}
 
-		$fetch_mode = ($settings['fetch_object']) ? PDO::FETCH_OBJ : PDO::FETCH_ASSOC;
-		$options = [
-			PDO::ATTR_EMULATE_PREPARES => false,
-			PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-			PDO::ATTR_DEFAULT_FETCH_MODE => $fetch_mode
-		];
-
-		$connection = new PDO($settings['dsn'], $settings['user'], $settings['password'], $options);
+		$connection = new PDO($settings['dsn'], $settings['user'], $settings['password'], $settings['options']);
 
 		if($to_read) {
 			$read_connection = $connection;
