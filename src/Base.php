@@ -1,23 +1,36 @@
 <?php
 namespace Jahan\Database;
 
-use \Jahan\Interfaces\LoggerInterface as Logger;
-use \Jahan\Filter\Str as Filter;
+use Jahan\Filter\Str as Filter;
+use PDO;
+use PDOStatement;
 
 class Base
 {
-	protected array $updatable = [];
-	protected Logger $logger;
-	protected DBWriter $dbwriter;
-	protected DBReader $dbreader;
+	protected $error_handler;
+	protected array $write_db_creds;
+	protected array $read_db_creds;
 
-	public function __construct(DBReader $dbreader, DBWriter $dbwriter,Logger $logger)
+	/**
+	 * 
+	 *
+	 * @param array $write_db_creds 
+	 * 	example:
+	 * 		[
+	 * 		'dsn' 	=> 'mysql:host=123.123.123.123;dbname=my_database;charset=utf8mb4',
+	 * 		'user'	=> 'root',
+	 * 		'password' => 'secret',
+	 * 		'fetch_object' => false,
+	 * 		]
+	 * @param array $read_db_creds same as $write_db_creds. Same credentials can be used.
+	 * @param callable|null $error_handler
+	 */
+	public function __construct(array $write_db_creds, array $read_db_creds,?callable $error_handler = null)
 	{
-		$dbreader->logger = $logger;
-		$dbwriter->logger = $logger;
-		$this->logger = $logger;
-		$this->dbreader = $dbreader;
-		$this->dbwriter = $dbwriter;
+		$this->error_handler = $error_handler;
+		$this->handler = (empty($error_handler)) ? false : true;
+		$this->write_db_creds = $write_db_creds;
+		$this->read_db_creds = $read_db_creds;
 	}
 
 	public function get_row(string $query, array $params = []) :array
@@ -46,6 +59,21 @@ class Base
 	public function get_list(string $query, array $params = []) :array
 	{
 		return $this->run_query($query, $params);
+	}
+
+	public function update(string $query, array $params = []) : int
+	{
+		return $this->run_update_query($query, $params);
+	}
+
+	public function insert(string $query, array $params = []) : string
+	{
+		return $this->run_insert_query($query,$params);
+	}
+
+	public function delete(string $query, array $params=[]) :int
+	{
+		return $this->run_update_query($query, $params);
 	}
 
 	/**
@@ -108,14 +136,56 @@ class Base
 		}
 	}
 
-	protected function run_query(string $query, array $params = [], bool $reading = true) :array
+	protected function connect(bool $to_read = true) 
 	{
-		$pdo = $reading ? $this->dbreader->connect() : $this->dbwriter->connect();
+		static $read_connection = null;
+		static $write_connection = null;
+
+		if($to_read) {
+			if(isset($read_connection)) {
+				return $read_connection;
+			}
+			$settings = $this->read_db_creds;
+		} else {
+			if(isset($write_connection)) {
+				return $write_connection;
+			}
+			$settings = $this->write_db_creds;		
+		}
+
+		$fetch_mode = ($settings['fetch_object']) ? PDO::FETCH_OBJ : PDO::FETCH_ASSOC;
+		$options = [
+			PDO::ATTR_EMULATE_PREPARES => false,
+			PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+			PDO::ATTR_DEFAULT_FETCH_MODE => $fetch_mode
+		];
+
+		$connection = new PDO($settings['dsn'], $settings['user'], $settings['password'], $options);
+
+		if($to_read) {
+			$read_connection = $connection;
+		} else {
+			$write_connection = $connection;
+		}
+
+		return $connection;
+	}
+
+	protected function call_error_handler($error) 
+	{
+		if($this->handler) {
+			call_user_func($this->error_handler, $error);
+		}
+	}
+
+	protected function run(PDO $pdo, string $query, array $params) :?PDOStatement
+	{
 		try {
 			$statement = $pdo->prepare($query);
 
 			if($statement === false) {
-				$this->handle_query_errors($query . print_r($pdo->errorInfo(),1));
+				$this->call_error_handler($query . print_r($pdo->errorInfo(),1));
+				return null;
 			} elseif(empty($params)) {
 				$success = $statement->execute();
 			} else {
@@ -123,89 +193,48 @@ class Base
 			}
 
 			if($success) {
-				return $statement->fetchAll();
+				return $statement;
 			} else {
-				$this->handle_query_errors('Faild query '.$query . print_r($pdo->errorInfo(),1));
-				return [];
+				$this->call_error_handler('Faild query '.$query . print_r($pdo->errorInfo(),1));
+				return null;			
 			}
 		} catch (\Exception $e) {
-			$this->handle_query_errors('Failed query ' . $query . print_r($pdo->errorInfo(),1));
+			$this->call_error_handler('Failed query ' . $query . print_r($pdo->errorInfo(),1));
+			return null;
+		}		
+	}
+
+	protected function run_query(string $query, array $params = [], bool $reading = true) :array
+	{
+		$pdo = $this->connect($reading);
+		$statement = $this->run($pdo, $query, $params);
+		if(!empty($statement)) {
+			return $statement->fetchAll();
+		} else {
 			return [];
 		}
 	}
 
-	protected function run_insert_query(string $query, array $params = []) : int
+	protected function run_insert_query(string $query, array $params = []) : string
 	{
-		try {
-			$pdo = $this->dbwriter->connect();
-
-			$statement = $pdo->prepare($query);
-
-			if($statement === false) {
-				$this->handle_query_errors($query . print_r($pdo->errorInfo(),1));
-			} elseif(empty($params)) {
-				$success = $statement->execute();
-			} else {
-				$success = $statement->execute( $this->add_colon_to_keys($params) );
-			}
-
-			if($success) {
-				return $statement->lastInsertId();
-			} else {
-				$this->handle_query_errors('Faild query '.$query . print_r($pdo->errorInfo(),1));
-				return 0;
-			}
-		} catch (\Exception $e) {
-			$this->handle_query_errors('Failed query ' . $query . print_r($pdo->errorInfo(),1));
-			return 0;
+		$pdo = $this->connect(false);
+		$statement = $this->run($pdo, $query, $params);
+		if(!empty($statement)) {
+			return $pdo->lastInsertId();
+		} else {
+			return '';
 		}
 	}
 	
-	function run_update_query(string $query, array $params=[]) :int
+	protected function run_update_query(string $query, array $params=[]) :int
 	{
-		try {
-			$pdo = $this->dbwriter->connect();
-
-			$statement = $pdo->prepare($query);
-
-			if($statement === false) {
-				$this->handle_query_errors($query . print_r($pdo->errorInfo(),1));
-			} elseif(empty($params)) {
-				$success = $statement->execute();
-			} else {
-				$success = $statement->execute( $this->add_colon_to_keys($params) );
-			}
-
-			if($success) {
-				return $statement->rowCount();
-			} else {
-				$this->handle_query_errors('Faild query '.$query . print_r($pdo->errorInfo(),1));
-				return 0;
-			}
-		} catch (\Exception $e) {
-			$this->handle_query_errors('Failed query ' . $query . print_r($pdo->errorInfo(),1));
+		$pdo = $this->connect(false);
+		$statement = $this->run($pdo, $query, $params);
+		if(!empty($statement)) {
+			return $statement->rowCount();
+		} else {
 			return 0;
 		}
-	}
-
-	function run_delete_query(string $query, array $params=[]) :int
-	{
-		return $this->run_update_query($query, $params);
-	}
-
-	protected function handle_query_errors(string $error_message) 
-	{
-		$trace = debug_backtrace();
-		unset($trace[0]);//remove call to this function.
-		$globals_to_log = [];
-		$globals_to_log['_GET'] = $_GET;
-		$globals_to_log['_POST'] = $_POST;
-		$globals_to_log['_COOKIE'] = $_COOKIE;
-		$globals_to_log['_SERVER'] = $_SERVER;
-		$message = "Query and Error: $error_message <br>\n<br>\n_SERVER: <pre>" . print_r(debug_backtrace(), true) . "<br>\n<br>\n" . print_r($globals_to_log, true) . "</pre>";
-		$this->logger->error($message);
-		debug($message);
-		throw new Exception('Oops! Something went wrong. Please try again. Application support have been notified.');
 	}
 
 	protected function add_colon_to_keys(array $subject_array) : array
