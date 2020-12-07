@@ -1,6 +1,7 @@
 <?php
 namespace Jahan\Database;
 
+use InvalidArgumentException;
 use Jahan\Filter\Str as Filter;
 use PDO;
 use PDOStatement;
@@ -13,11 +14,12 @@ class Base
 	protected array $read_db_creds;
 	protected array $cache = [];
 	protected const ERROR_CODE = 2;
+	protected string $fetch_class = '';
 
 	/**
 	 * 
 	 *
-	 * @param array $write_db_creds 
+	 * @param array $read_db_creds 
 	 * 	example:
 	 * 		[
 	 * 		'dsn' 	=> 'mysql:host=123.123.123.123;dbname=my_database;charset=utf8mb4',
@@ -30,10 +32,11 @@ class Base
 	 * 			]
 	 * 		]
 	 * 	
-	 * @param array $read_db_creds same as $write_db_creds. Same credentials can be used.
+	 * @param array $write_db_creds same as $read_db_creds. Same credentials can be used.
+	 * 		passing empty array will disables write functions.
 	 * @param callable|null $error_handler
 	 */
-	public function __construct(array $write_db_creds, array $read_db_creds,?callable $error_handler = null)
+	public function __construct(array $read_db_creds, array $write_db_creds = [], ?callable $error_handler = null)
 	{
 		$this->error_handler = $error_handler;
 		$this->handler = (empty($error_handler)) ? false : true;
@@ -54,7 +57,7 @@ class Base
 		}
 	}
 
-	public function get_row(string $query, array $params = []) :array
+	public function get_row(string $query, array $params = [])
 	{
 		$result = $this->run_query($query, $params);
 		if(!empty($result[0])) {
@@ -68,8 +71,8 @@ class Base
 	{
 		$result = $this->get_row($query, $params);
 		if(!empty($result)) {
-			if(array_key_exists($field, $result)) {
-				return $result[$field];
+			if(property_exists($result, $field)) {
+				return $result->$field;
 			} else {
 				throw new \InvalidArgumentException("Query is not returning the expected field");
 			}
@@ -118,19 +121,19 @@ class Base
 			if (!empty($result)) {
 				foreach ($result as $row) {
 					//do we already have a row with this key?
-					if(  !empty($this->cache[$cache_id][  $row[$cache_key]  ])  ) {
+					if(  !empty($this->cache[$cache_id][  $row->$cache_key  ])  ) {
 						//store multiple rows for the same key in an array that contains all rows.
 						//if array for key is already created, just add this row to it. 
 						//otherwise make the previous value into an array element and add this $row to the array.
-						if(  empty($this->cache[$cache_id][  $row[$cache_key]  ][$cache_key])  ) {
-							$this->cache[$cache_id][  $row[$cache_key]  ][] = $row;
+						if(  empty($this->cache[$cache_id][  $row->$cache_key  ][$cache_key])  ) {
+							$this->cache[$cache_id][  $row->$cache_key  ][] = $row;
 						} else {
-							$this->cache[$cache_id][  $row[$cache_key]  ]= [  $this->cache[$cache_id][  $row[$cache_key]  ]  ];
-							$this->cache[$cache_id][  $row[$cache_key]  ][] = $row;
+							$this->cache[$cache_id][  $row->$cache_key  ]= [  $this->cache[$cache_id][  $row->$cache_key  ]  ];
+							$this->cache[$cache_id][  $row->$cache_key  ][] = $row;
 						}
 					} else {
 						//store $row in cache using the key
-						$this->cache[$cache_id][  $row[$cache_key]  ] = $row;
+						$this->cache[$cache_id][  $row->$cache_key  ] = $row;
 					}
 				}
 			} else {
@@ -157,12 +160,24 @@ class Base
 		}
 	}
 
-	protected function run_query(string $query, array $params = [], $read_connection = true) :array
+	public function set_class($class)
+	{
+		$this->fetch_class = $class;
+		return $this;
+	}
+
+	protected function run_query(string $query, array $params = [], $read_connection = true)
 	{
 		$pdo = $this->connect($read_connection);
 		$statement = $this->run($pdo, $query, $params);
 		if(!empty($statement)) {
-			return $statement->fetchAll();
+			if(empty($this->fetch_class)) {
+				return $statement->fetchAll();
+			} else {
+				$fetch_class = $this->fetch_class;
+				$this->fetch_class = '';
+				return $statement->fetchAll(PDO::FETCH_CLASS | PDO::FETCH_PROPS_LATE, $fetch_class);
+			}
 		} else {
 			return [];
 		}
@@ -183,6 +198,11 @@ class Base
 				return $write_connection;
 			}
 			$settings = $this->write_db_creds;		
+		}
+
+		if(empty($settings)) {
+			$connection_type = ($to_read) ? "read" : "write";
+			throw new InvalidArgumentException("Database connection settings not provided for $connection_type operation.");
 		}
 
 		$connection = new PDO($settings['dsn'], $settings['user'], $settings['password'], $settings['options']);
@@ -213,7 +233,7 @@ class Base
 			$statement = $pdo->prepare($query);
 
 			if($statement === false) {
-				$this->call_error_handler($query . print_r($pdo->errorInfo(),1), $this->ERROR_CODE, __FILE__, __LINE__);
+				$this->call_error_handler($query . print_r($pdo->errorInfo(),1), self::ERROR_CODE, __FILE__, __LINE__);
 				return null;
 			} elseif(empty($params)) {
 				$success = $statement->execute();
@@ -224,11 +244,11 @@ class Base
 			if($success) {
 				return $statement;
 			} else {
-				$this->call_error_handler('Faild query '.$query . print_r($pdo->errorInfo(),1), $this->ERROR_CODE, __FILE__, __LINE__);
+				$this->call_error_handler('Faild query '.$query . print_r($pdo->errorInfo(),1), self::ERROR_CODE, __FILE__, __LINE__);
 				return null;			
 			}
 		} catch (\Exception $e) {
-			$this->call_error_handler('Failed query ' . $query . print_r($pdo->errorInfo(),1), $this->ERROR_CODE, __FILE__, __LINE__);
+			$this->call_error_handler('Failed query ' . $query . print_r($pdo->errorInfo(),1), self::ERROR_CODE, __FILE__, __LINE__);
 			return null;
 		}		
 	}
