@@ -12,6 +12,7 @@ class Base
 	protected array $write_db_creds;
 	protected array $read_db_creds;
 	protected array $cache = [];
+	protected const ERROR_CODE = 2;
 
 	/**
 	 * 
@@ -158,6 +159,17 @@ class Base
 		}
 	}
 
+	protected function run_query(string $query, array $params = [], $read_connection = true) :array
+	{
+		$pdo = $this->connect($read_connection);
+		$statement = $this->run($pdo, $query, $params);
+		if(!empty($statement)) {
+			return $statement->fetchAll();
+		} else {
+			return [];
+		}
+	}
+
 	protected function connect(bool $to_read = true) 
 	{
 		static $read_connection = null;
@@ -186,10 +198,14 @@ class Base
 		return $connection;
 	}
 
-	protected function call_error_handler($error) 
+	protected function call_error_handler(string $error, int $code, string $file, int $line) 
 	{
+		$message = "File: $file Line: $line\tMessage: $error";
 		if($this->handler) {
-			call_user_func($this->error_handler, $error);
+			
+			call_user_func($this->error_handler, "Code: $code\t" . $message);
+		} else {
+			throw new \RuntimeException($message, $code); 
 		}
 	}
 
@@ -199,7 +215,7 @@ class Base
 			$statement = $pdo->prepare($query);
 
 			if($statement === false) {
-				$this->call_error_handler($query . print_r($pdo->errorInfo(),1));
+				$this->call_error_handler($query . print_r($pdo->errorInfo(),1), $this->ERROR_CODE, __FILE__, __LINE__);
 				return null;
 			} elseif(empty($params)) {
 				$success = $statement->execute();
@@ -210,24 +226,13 @@ class Base
 			if($success) {
 				return $statement;
 			} else {
-				$this->call_error_handler('Faild query '.$query . print_r($pdo->errorInfo(),1));
+				$this->call_error_handler('Faild query '.$query . print_r($pdo->errorInfo(),1), $this->ERROR_CODE, __FILE__, __LINE__);
 				return null;			
 			}
 		} catch (\Exception $e) {
-			$this->call_error_handler('Failed query ' . $query . print_r($pdo->errorInfo(),1));
+			$this->call_error_handler('Failed query ' . $query . print_r($pdo->errorInfo(),1), $this->ERROR_CODE, __FILE__, __LINE__);
 			return null;
 		}		
-	}
-
-	protected function run_query(string $query, array $params = [], bool $reading = true) :array
-	{
-		$pdo = $this->connect($reading);
-		$statement = $this->run($pdo, $query, $params);
-		if(!empty($statement)) {
-			return $statement->fetchAll();
-		} else {
-			return [];
-		}
 	}
 
 	protected function run_insert_query(string $query, array $params = []) : string
