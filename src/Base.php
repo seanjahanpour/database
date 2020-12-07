@@ -23,14 +23,12 @@ class Base
 	 * 		'dsn' 	=> 'mysql:host=123.123.123.123;dbname=my_database;charset=utf8mb4',
 	 * 		'user'	=> 'root',
 	 * 		'password' => 'secret',
-	 * 		'options' => [\PDO::ATTR_DEFAULT_FETCH_MODE => \PDO::FETCH_OBJ,\PDO::ATTR_EMULATE_PREPARES => false],
-	 * 		]
-	 * 	Recommended pdo options:
-	 * 		'options' => [
-	 * 			\PDO::ATTR_EMULATE_PREPARES => false,
-	 * 			\PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION,
-	 * 			\PDO::ATTR_DEFAULT_FETCH_MODE => \PDO::FETCH_OBJ
+	 * 		'options' => [ 
+	 * 				\PDO::ATTR_DEFAULT_FETCH_MODE => \PDO::FETCH_OBJ,
+	 * 				\PDO::ATTR_EMULATE_PREPARES => false,
+	 * 				\PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION,
 	 * 			]
+	 * 		]
 	 * 	
 	 * @param array $read_db_creds same as $write_db_creds. Same credentials can be used.
 	 * @param callable|null $error_handler
