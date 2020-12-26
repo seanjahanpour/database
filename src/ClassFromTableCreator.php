@@ -5,12 +5,16 @@ use Jahan\Filter\Str as StrFilter;
 
 class ClassFromTableCreator
 {
-	public function __construct(Base $db, string $folder = 'tables/', string $namespace = '')
+	public function __construct(Core $db, string $folder = 'tables/', string $namespace = '', string $base_class = '\Jahan\Database\DataAccessBase')
 	{
 		$tables = $db->get_list("SHOW TABLES");
 
 		if(!file_exists($folder)) {
 			mkdir($folder);
+		}
+		
+		if(!empty($base_class)) {
+			$base_class = 'extends ' . $base_class;
 		}
 
 		foreach($tables as $table) {
@@ -26,13 +30,15 @@ class ClassFromTableCreator
 
 			$file_name = $folder . $class_name . '.php';
 			if(!file_exists($file_name)) {
+				
+
 				$content = <<<CORE
 					<?php
 					namespace $namespace;
 
-					class $class_name
+					class $class_name $base_class
 					{
-						protected string \$_table = '$table';
+						public const TABLE = '$table';
 					
 					CORE;
 				
@@ -58,11 +64,16 @@ class ClassFromTableCreator
 					$insertable = true;
 					$lazy_load = false;
 
-					$default = "'{$field_info['Default']}'";
+					$nullable = ($field_info['Null'] == 'YES') ? 'true' : 'false';
+
+					$default = ($field_info['Default'] === null && $nullable === 'true') ? 'null' : "'{$field_info['Default']}'";
 
 					if($field_info['Key'] == 'PRI') {
 						$primary_key = $field_info['Field'];
-						$updateable = false;
+						if(stripos($field_info['Extra'], 'auto_increment') !== false) {
+							$updateable = false;
+							//$need_setter[] = ['type'=>'', 'name'=> StrFilter::alpha_numeric($field_info['Field'], [], '_')];
+						}	
 					}
 
 					switch (strtolower($type)) {
@@ -85,8 +96,10 @@ class ClassFromTableCreator
 						case 'tinyint':
 							$length = StrFilter::numbers_only($field_info['Type'],[]);
 							if($length == 1) {
-								$var_type = 'bool';
-								$default = ($field_info['Default'] == '1') ? 'true' : 'false';
+								$var_type .= 'bool';
+								if($default != 'null') {
+									$default = ($field_info['Default'] == '1') ? 'true' : 'false';
+								}
 								break;
 							}
 						case 'tinyint unsigned':
@@ -97,19 +110,20 @@ class ClassFromTableCreator
 						case 'bigint':
 						case 'bigint unsigned':
 							$var_type .= 'int';
-							$default = trim($default, "'");
+							$default = ($default === 'null') ? 'null' : trim($default, "'");
 							break;
 						case 'decimal':
 						case 'float':
 						case 'float unsigned':
 							$var_type .= 'float';
-							$default = trim($default, "'");
+							$default = ($default === 'null') ? 'null' : trim($default, "'");
 							break;
 						case 'timestamp':
 						case 'datetime':
 							if(stripos($field_info['Default'],'CURRENT_TIMESTAMP') !== false) {
 								$insertable = false;
 								$updateable = false;
+								$default = '';
 							}
 							
 							if(stripos($field_info['Extra'], 'on update CURRENT_TIMESTAMP') !== false) {
@@ -118,13 +132,14 @@ class ClassFromTableCreator
 							
 							$need_setter[] = ['type'=>'\DateTime', 'name'=> StrFilter::alpha_numeric($field_info['Field'], [], '_')];
 
-							$var_type = '\DateTime';
-							$default = '';
+							$var_type .= '\DateTime';
+							
 							break;
 						case 'date':
 							$var_type .= 'string';
 							break;
 						case 'enum':
+						case 'set':
 							$var_type .= 'string';
 
 							$matches = [];
@@ -164,13 +179,11 @@ class ClassFromTableCreator
 					}
 
 					$fields[] = ['field'=>$field,'type'=>$var_type,'default'=>$default];
-					
-					$nullable = ($field_info['Null'] == 'YES') ? 'true' : 'false';
 					$field_properties[] = ['field'=>$field,'type'=>$field_info['Type'], 'nullable'=>$nullable, 'default'=>$field_info['Default'], 'extra'=>$field_info['Extra']];
 				}
 
 				if(!empty($primary_key)) {
-					$content .= "	protected string \$_pk = '$primary_key';" . PHP_EOL;
+					$content .= "	public const PK = '$primary_key';" . PHP_EOL;
 				}
 				
 				$content .= PHP_EOL;
@@ -186,20 +199,21 @@ class ClassFromTableCreator
 
 
 				if(!empty($lazy_load_fields)) {
-					$lazy_load = implode(', ', $lazy_load_fields);
-					$content .= "	protected array \$lazy_load_fields = ['$lazy_load'];		//fields to not load when loading record. This fields are automatically pulled from database on access" . PHP_EOL . PHP_EOL;
+					$lazy_load = implode("', '", $lazy_load_fields);
+					$content .= "	public const LAZY_LOAD_FIELDS = ['$lazy_load'];		//fields to not load when loading record. This fields are automatically pulled from database on access" . PHP_EOL . PHP_EOL;
 				}
 
-				$content .= "	protected array \$index_fields = [];		//empty array means do not show any fields for index page" . PHP_EOL;
+				$content .= "	public const INDEX_FIELDS = [];		//empty array means do not show any fields for index page" . PHP_EOL;
+				$content .= "				// To change any of class const programatically, change the variable type to static, or declare new variable with the same name" . PHP_EOL;
 
 				if(!empty($updateables)) {
 					$tmp = implode("', '", $updateables);
-					$content .= "	protected array \$updatables = ['$tmp'];	//empty array means all fields are updatable" . PHP_EOL;
+					$content .= "	public const UPDATABLES = ['$tmp'];	//empty array means all fields are updatable" . PHP_EOL;
 				}
 
 				if(!empty($insertables)) {
 					$tmp = implode("', '", $insertables);
-					$content .= "	protected array \$insertables = ['$tmp'];	//empty array means all fields are insertable" . PHP_EOL;
+					$content .= "	public const INSERTABLES = ['$tmp'];	//empty array means all fields are insertable" . PHP_EOL;
 				}
 				
 				$content .= PHP_EOL;
@@ -207,31 +221,24 @@ class ClassFromTableCreator
 				if(!empty($fields)) {
 					$tmp = array_column($fields, 'field');
 					$tmp = implode("', '", $tmp);
-					$content .= "	protected array \$fields = ['$tmp'];" . PHP_EOL;
+					$content .= "	public const FIELDS = ['$tmp'];" . PHP_EOL;
 
-					$content .= "	protected array \$field_properties = [" . PHP_EOL;
+					$content .= "	public const FIELD_PROPERTIES = [" . PHP_EOL;
 					foreach($field_properties as $field) {
 						$content .= "		'{$field['field']}' => ['type' => \"{$field['type']}\", 'nullable' => {$field['nullable']}, 'default' => \"{$field['default']}\", 'extra' => \"{$field['extra']}\"]," . PHP_EOL;
 					}
 					$content .= "	];" . PHP_EOL . PHP_EOL;
 					
 					foreach($fields as $field) {
-						if(in_array($field['field'], $insertables)) {
-							$exposure = 'public';
+						if(in_array($field['field'], $lazy_load_fields)) {
+							$exposure = 'protected';
 						} else {
-							$exposure = 'protected';
+							$exposure = 'public';
 						}
-
-						if($exposure == 'public' && !in_array($field['field'], $updateables)) {
-							$exposure = 'protected';
-						}
-
-						if(in_array($field['field'], array_column($need_setter, 'name'))) {
-							$exposure = 'protected';
-						}
-
+						
 						$name = $field['field'];
-						if($exposure != 'public') {
+						if(in_array($name, array_column($need_setter, 'name'))) {
+							$exposure = 'protected';
 							$name = '_' . $name;
 						}
 
@@ -248,36 +255,64 @@ class ClassFromTableCreator
 				}
 
 				$content .= PHP_EOL;
-
+				
 				if(!empty($need_setter)) {
 					$content .= "	public function __set(\$property, \$value)" . PHP_EOL;
-					$content .= "	{" . PHP_EOL;
-					
-					$content .= "		switch(\$property) {" . PHP_EOL;				
+					$content .= "	{" . PHP_EOL;					
+					$content .= "		switch(\$property) {" . PHP_EOL;
+								
 					foreach($need_setter as $field) {
 						if($field['type'] == '\DateTime') {
+							$date_time_fields[] = $field;
+						} elseif ($field['type'] == 'enum') {
 							$content .= "			case '{$field['name']}':" . PHP_EOL;
-							$content .= "				\$this->_{$field['name']} = new \DateTime(\$value);" . PHP_EOL;
-							$content .= "				break;" . PHP_EOL;
-						}
-						if($field['type'] == 'enum') {
-							$content .= "			case '{$field['name']}':" . PHP_EOL;
-							$content .= "				if( in_array(\$value, ['";
-							
-							$content .= implode("','",$field['values']);
-
-							$content .= "']) ) {" . PHP_EOL;
+							$content .= "				if( in_array(\$value, ['" . implode("','",$field['values']) . "']) ) {" . PHP_EOL;
 							$content .= "					\$this->_{$field['name']} = \$value;" . PHP_EOL;
 							$content .= "				} else {" . PHP_EOL;
 							$content .= "					throw new \InvalidArgumentException('Invalid value for {$field['name']}');" . PHP_EOL;
 							$content .= "				}" . PHP_EOL;
 							$content .= "				break;" . PHP_EOL;
+						} else {
+							$content .= "			case '{$field['name']}':" . PHP_EOL;
+							$content .= "				\$this->_{$field['name']} = \$value;" . PHP_EOL;
+							$content .= "				break;" . PHP_EOL;							
 						}					
 					}
+					if(!empty($date_time_fields)) {
+						foreach($date_time_fields as $field) {
+							$content .= "			case '{$field['name']}':" . PHP_EOL;
+						}
+						$content .= "				\$property = '_' . \$property;" . PHP_EOL;
+						$content .= "				if(\$value === null) {" . PHP_EOL;
+						$content .= "					\$this->\$property = null;" . PHP_EOL;
+						$content .= "				} else {" . PHP_EOL;
+						$content .= "					\$this->\$property = new \DateTime(\$value);" . PHP_EOL;
+						$content .= "				}" . PHP_EOL;
+						$content .= "				break;" . PHP_EOL;
+					}
+					$content .= "			default:" . PHP_EOL;
+					$content .= "				parent::__set(\$property, \$value);" . PHP_EOL;
+					$content .= "				break;" . PHP_EOL;
 					
 					$content .= "		}" . PHP_EOL;
 					$content .= "	}" . PHP_EOL;
 				}
+
+				$content .= "	public function __get(\$property)" . PHP_EOL;
+				$content .= "	{" . PHP_EOL;
+
+				$content .= "		switch(\$property) {" . PHP_EOL;				
+				
+				if(!empty($need_setter)) foreach($need_setter as $field) {					
+					$content .= "			case '{$field['name']}':" . PHP_EOL;
+				}
+				$content .= "				\$property = '_' . \$property;" . PHP_EOL;
+				$content .= "				return \$this->\$property;" . PHP_EOL;
+				
+				$content .= "			default:" . PHP_EOL;
+				$content .= "				return parent::__get(\$property);" . PHP_EOL;
+				$content .= "		}" . PHP_EOL;
+				$content .= "	}" . PHP_EOL;
 
 				$content .= '}';
 
