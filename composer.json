@@ -19,5 +19,13 @@
 		"psr-4": {
 			"Jahan\\Database\\":"src/"
 		}
+	},
+	"autoload-dev": {
+		"psr-4": {
+			"Test\\":"tests/"
+		}
+	},
+	"require-dev": {
+		"phpunit/phpunit": "^9"
 	}
 }

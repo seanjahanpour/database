@@ -1,9 +1,7 @@
 <?php
 namespace Jahan\Database;
 
-use InvalidArgumentException;
-
-class WhereClause
+class Where
 {
 	public $field;
 	public $operator;
@@ -16,7 +14,13 @@ class WhereClause
 		$this->value = $value;
 	}
 
-	public function getClause()
+	public static function build($field, $operator, $value) :string
+	{
+		$obj = new Where($field, $operator, $value);
+		return (string) $obj;
+	}
+	
+	public function getClause() :string
 	{
 		$operator = strtoupper($this->operator);
 		$result = (string) $this->field . ' ' . $operator;

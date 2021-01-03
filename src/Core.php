@@ -1,49 +1,46 @@
 <?php
 namespace Jahan\Database;
 
-use InvalidArgumentException;
 use Jahan\Filter\Str as Filter;
 use PDO;
 use PDOStatement;
-use stdClass;
+use InvalidArgumentException;
 
 class Core
 {
 	protected $error_handler;
 	protected bool $handler;
-	protected array $write_db_creds;
-	protected array $read_db_creds;
-	protected array $cache = [];
+	protected array $write_creds;
+	protected array $read_creds;
 	protected const ERROR_CODE = 2;
 	protected string $fetch_class = '';
 	protected array $fetch_class_params = [];
 
 	/**
-	 * 
-	 *
-	 * @param array $read_db_creds 
-	 * 	example:
-	 * 		[
-	 * 		'dsn' 	=> 'mysql:host=123.123.123.123;dbname=my_database;charset=utf8mb4',
-	 * 		'user'	=> 'root',
-	 * 		'password' => 'secret',
-	 * 		'options' => [ 
-	 * 				\PDO::ATTR_DEFAULT_FETCH_MODE => \PDO::FETCH_OBJ,
-	 * 				\PDO::ATTR_EMULATE_PREPARES => false,
-	 * 				\PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION,
-	 * 			]
-	 * 		]
-	 * 	
-	 * @param array $write_db_creds same as $read_db_creds. Same credentials can be used.
-	 * 		passing empty array will disables write functions.
-	 * @param callable|null $error_handler
-	 */
-	public function __construct(array $read_db_creds, array $write_db_creds = [], ?callable $error_handler = null)
+	 * @param array $read_creds 
+	* example:
+	* <code>
+	* $read_creds =	[
+	* 	'dsn' 	=> 'mysql:host=123.123.123.123;dbname=my_database;charset=utf8mb4',
+	* 	'user'	=> 'user',
+	* 	'password' => 'secret',
+	* 	'options' => [ 
+	* 			\PDO::ATTR_DEFAULT_FETCH_MODE => \PDO::FETCH_OBJ,
+	* 			\PDO::ATTR_EMULATE_PREPARES => false,
+	* 			\PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION,
+	* 		]
+	* 	];
+	* </code>	
+	* @param array $write_creds same as $read_creds. Same credentials can be used if the read and write database are the same.
+	* 		passing empty array will disables write functions.
+	* @param callable|null $error_handler
+	*/
+	public function __construct(array $read_creds, array $write_creds=[], ?callable $error_handler=null)
 	{
 		$this->error_handler = $error_handler;
 		$this->handler = (empty($error_handler)) ? false : true;
-		$this->write_db_creds = $write_db_creds;
-		$this->read_db_creds = $read_db_creds;
+		$this->write_creds = $write_creds;
+		$this->read_creds = $read_creds;
 
 		$options = [
 			PDO::ATTR_EMULATE_PREPARES => false,
@@ -51,141 +48,240 @@ class Core
 			PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_OBJ
 		];
 
-		if(empty($this->write_db_creds['options'])) {
-			$this->write_db_creds['options'] = $options;
+		if(empty($this->write_creds['options'])) {
+			$this->write_creds['options'] = $options;
 		}
-		if(empty($this->read_db_creds['options'])) {
-			$this->read_db_creds['options'] = $options;
+		if(empty($this->read_creds['options'])) {
+			$this->read_creds['options'] = $options;
 		}
 	}
 
-	public function get_record($table, $pk, $id, $fields = [], bool $cache = false) :object
+	/**
+	 * Get single record from database.
+	 *
+	 * @param string $table table name or expression
+	 * @param string|array $fields List of fields to SELECT from database. It can be comma separated list of array of string.
+	 * 				Example: 'id,first_name, last_name'
+	 * 				Example: ['id', 'first_name', 'last_name']
+	 * 				Example: '*'
+	 * 				Empty string or array is same as '*'
+	 * @param string $where where clause
+	 * @param array $params array of values for where clause
+	 * @param string $group_by grouping expression
+	 * @param string $order_by sorting expression
+	 * @param int $offset offset. No offset if no value passed.
+	 * 
+	 * @return array|object|null depending on PDO option set by __construct, result will return an object or an array. Null will be returned when no results where found.
+	 */
+	public function get_row(string $table, $fields, string $where='',array $params=[], string $group_by='', string $order_by='', int $offset=0)
 	{
-		$select = $this->create_select_field_list($fields);
+		$records = $this->get_records($table, $fields, $where, $params, $group_by, $order_by, 1, $offset);
+
+		if (!empty($records)) {
+			return $records[0];
+		} else {
+			return null;
+		}
+	}
+
+	/**
+	 * Get multiple records from database
+	 *
+	 * @param string $table table name or expression
+	 * @param array|string $fields List of fields to SELECT from database. It can be comma separated list of array of string.
+	 * 				Example: 'id,first_name, last_name'
+	 * 				Example: ['id', 'first_name', 'last_name']
+	 * 				Example: '*'
+	 * 				Empty string or array is same as '*'
+	 * @param string $where where clause
+	 * @param array $params array of values for where clause
+	 * @param string $group_by grouping expression
+	 * @param string $order_by sorting expression
+	 * @param integer $limit maximum number of records
+	 * @param integer $offset offset.
+	 * @return array|object|null depending on PDO option set by __construct, result will return an object or an array. Null will be returned when no results where found.
+	 */
+	public function get_rows(string $table, $fields, string $where, $params=[], string $group_by='', string $order_by='', int $limit=0, int $offset=0)
+	{
+		$query = $this->build_select_query($table, $fields, $where, $group_by, $order_by, $limit, $offset);
+		return $this->run_query($query, $params);
+	}
+
+	/**
+	 * Get value of a single field from a single row in database
+	 *
+	 * @param string $table table name or expression
+	 * @param array|string $field to get value of. This should be a single member array or string with single field name.
+	 * @param string $where where clause
+	 * @param array $params where clause parameters is any
+	 * @param string $group_by grouping expression
+	 * @param string $order_by sorting expression
+	 * @param integer $offset offset.
+	 * @return mix field value from database or blank string.
+	 */
+	public function get_field(string $table, $field, string $where='',array $params=[], string $group_by='', string $order_by='', int $offset=0)
+	{
+		$select_field = $this->build_select_field_list($field);
+		$select_field .= ' AS value';
+		$record = $this->get_record($table, $field, $where, $params, $group_by, $order_by, $offset);
 		
-		$query = "SELECT $select FROM " . $table;
-
-		if($cache) {
-			return $this->get_cached_row($id, $query, [], $pk);
-		} else {
-			$record = $this->get_row($query . " WHERE $pk = :id LIMIT 1", ['id' => $id]);
-			if (!empty($record)) {
-				return $record;
-			} else {
-				return new stdClass();
+		if(!empty($record)) {
+			if(is_array($record)) {
+				return $record['value'];
+			} elseif(is_object($record)) {
+				return $record->value;
 			}
 		}
-	}
 
-	public function get_records($table, $fields = [], $where_clause = [], $where_params = [],string $group_by = '',string $order_by = '', int $limit = 0, int $offset = 0)
-	{
-		$query = $this->make_select_query($table, $fields, $where_clause, $group_by, $order_by, $limit, $offset);
-		return $this->run_query($query, $where_params);
-	}
-
-	public function get_row(string $query, array $params = [])
-	{
-		$result = $this->run_query($query, $params);
-		if(!empty($result[0])) {
-			return $result[0];
-		} else {
-			return [];
-		}
-	}
-
-	public function get_value(string $query,array $params = [],string $field = 'value')
-	{
-		$result = $this->get_row($query, $params);
-		if(!empty($result)) {
-			if(property_exists($result, $field)) {
-				return $result->$field;
-			} else {
-				throw new \InvalidArgumentException("Query is not returning the expected field");
-			}
-		}
 		return '';
 	}
 
-	public function get_list(string $query, array $params = []) :array
+	/**
+	 * insert a record into database.
+	 * 
+	 * @param  string $table   table name or expression
+	 * @param  array $data    associative array of keys and values
+	 * @param  array $allowed array with list of all the fields that are allowed to be inserted. Empty array allows all fields passed in $data to be inserted.
+	 * @param  bool $ignore  if $ignore is set
+	 * 
+	 * @return ?string  he insert id of the new record or null on failure
+	 */
+	public function insert(string $table, array $data, array $allowed=[], bool $ignore=false) 
+	{
+		if(!empty($allowed)) {
+			$this->remote_forbidden_fields($data, $allowed);			
+		}
+
+		$ignore_mod = ($ignore) ? "IGNORE" : "";
+
+		if(!empty($data)) {
+			$query = "INSERT $ignore_mod INTO $table SET ";
+			$query .= $this->build_update_field_list($data);
+			return $this->insert_record($query,$data);
+		}
+		return null;
+	}
+
+	/**
+	 * Undocumented function
+	 *
+	 * @param string $table table name or expression
+	 * @param array $data associative array of fields and values
+	 * @param string $where where clause
+	 * @param array $params parameters for where clause if needed.
+	 * @param array $allowed list of allowed fields to be updated. Any field in $data that is not in this list will be removed. If $allowed is not passed or empty array is passed, all fields will be allowed.
+	 * @return ?integer number of rows effected or null on failure
+	 */
+	public function update(string $table, array $data, string $where, array $params=[], array $allowed=[]) :int
+	{
+		if(!empty($allowed)) {
+			$this->remote_forbidden_fields($data, $allowed);
+		}
+
+		if(!empty($data)) {
+			$query = "UPDATE $table SET ";
+			$query .= $this->build_update_field_list($data);
+			$query .= " WHERE $where";
+			return $this->update_record($query, array_merge($data,$params));
+		}
+
+		return null;
+	}
+
+	/**
+	 * run query and get the first row of the result. 
+	 *
+	 * @param string $query
+	 * @param array $params
+	 * @return array|object|null
+	 */
+	public function get_record(string $query, array $params=[])
+	{
+		$records = $this->run_query($query, $params);
+
+		if (!empty($records)) {
+			return $records[0];
+		} else {
+			return null;
+		}
+	}
+
+	/**
+	 * get value of a single field from a row in database
+	 *
+	 * NOTE: query must set the field name to "value". For example: "SELECT id AS value FROM user LIMIT 1";
+	 * 
+	 * @param string $query
+	 * @param array $params prepare parameters
+	 * @return mix value of field or null on failure.
+	 */
+	public function get_value(string $query, array $params=[])
+	{
+		$record = $this->get_record($query, $params);
+		if(is_array($record)) {
+			return $record['value'];
+		} elseif(is_object($record)) {
+			return $record->value;
+		}
+
+		return null;
+	}
+
+	/**
+	 * run query and get all rows of the result.
+	 *
+	 * @param string $query
+	 * @param array $params
+	 * @return array|null array of result or null on failure or empty result set.
+	 */
+	public function get_list(string $query, array $params=[])
 	{
 		return $this->run_query($query, $params);
 	}
 
-	public function update(string $query, array $params = []) : int
-	{
-		return $this->run_update_query($query, $params);
-	}
-
-	public function insert(string $query, array $params = []) : string
-	{
-		return $this->run_insert_query($query,$params);
-	}
-
-	public function delete(string $query, array $params=[]) :int
+	/**
+	 * run query for updating fields in database
+	 *
+	 * @param string $query
+	 * @param array $params
+	 * @return integer returns number of rows effected
+	 */
+	public function update_record(string $query, array $params=[]) : int
 	{
 		return $this->run_update_query($query, $params);
 	}
 
 	/**
-	* Cache are stored specific to query and params. When this function is called, and cache value for
-	*	given query+params doesn't exists, cache will be created and stored using $cache_key column from results.
-	* When calling on cached result, $cache_key is ignored.
-	*
-	* Usage:
-	*	get_cached_row(1, "SELECT * FROM table1 WHERE category= :c1", ['c1'=>'fun_record']);
-	*		returns row with id=1
-	*	get_cached_row('unique_value', "SELECT * FROM table1", [], 'unique_row');
-	*		returns row with unique_row = unique_value
-	*/
-	public function get_cached_row($key_value, string $query, array $params = [],string $cache_key = 'id') :array
+	 * run query for inserting a new row in database
+	 *
+	 * @param string $query
+	 * @param array $params
+	 * @return string last inserted id.
+	 */
+	public function insert_record(string $query, array $params=[]) :string
 	{
-		$cache_id = Filter::alpha_numeric($query) . Filter::alpha_numeric(implode('',$params));
-
-		//if cache is empty, built it.
-		if(empty($this->cache[$cache_id])) {
-			$result = $this->run_query($query, $params);
-			if (!empty($result)) {
-				foreach ($result as $row) {
-					//do we already have a row with this key?
-					if(  !empty($this->cache[$cache_id][  $row->$cache_key  ])  ) {
-						//store multiple rows for the same key in an array that contains all rows.
-						//if array for key is already created, just add this row to it. 
-						//otherwise make the previous value into an array element and add this $row to the array.
-						if(  empty($this->cache[$cache_id][  $row->$cache_key  ][$cache_key])  ) {
-							$this->cache[$cache_id][  $row->$cache_key  ][] = $row;
-						} else {
-							$this->cache[$cache_id][  $row->$cache_key  ]= [  $this->cache[$cache_id][  $row->$cache_key  ]  ];
-							$this->cache[$cache_id][  $row->$cache_key  ][] = $row;
-						}
-					} else {
-						//store $row in cache using the key
-						$this->cache[$cache_id][  $row->$cache_key  ] = $row;
-					}
-				}
-			} else {
-				$this->cache[$cache_id] = [];
-			}
-		}
-
-
-		if(!empty($this->cache[$cache_id][$key_value])) {
-			return $this->cache[$cache_id][$key_value];
-		} else {
-			return [];
-		}
+		return $this->run_insert_query($query,$params);
 	}
 
-	public function get_list_from_cache(string $query, array $params = []) :array
+	/**
+	 * run query for deleting fields in database
+	 *
+	 * @param string $query
+	 * @param array $params
+	 * @return integer returns number of rows effected
+	 */
+	public function delete_record(string $query, array $params=[]) :int
 	{
-		$cache_id = Filter::alpha_numeric($query) . Filter::alpha_numeric(implode('',$params));
-		
-		if(!empty($this->cache[$cache_id])) {
-			return $this->cache[$cache_id];
-		} else {
-			return [];
-		}
+		return $this->run_update_query($query, $params);
 	}
 
+	/**
+	 * Set class to be instantiated for the very next call to fetch data from database.
+	 *
+	 * @param string $class
+	 * @param array $params
+	 * @return $this
+	 */
 	public function set_class(string $class, array $params=[])
 	{
 		$this->fetch_class = $class;
@@ -193,9 +289,86 @@ class Core
 		return $this;
 	}
 
-	protected function run_query(string $query, array $params = [], $read_connection = true)
+	/**
+	 * call PDO->beginTransaction()
+	 * PDO beginTransaction()
+	 *
+	 * @return object
+	 */
+	public function start_transaction(): object
 	{
-		$pdo = $this->connect($read_connection);
+		$pdo = $this->connect(false); //write connection
+		$pdo->beginTransaction();
+		return $this;
+	}
+
+	/**
+	 * call PDO->commit()
+	 * Commit transaction started with start_transaction
+	 *
+	 * @return boolean true on success
+	 */
+	public function commit(): bool
+	{
+		$pdo = $this->connect(false); //write connection
+		return $pdo->commit();
+	}
+
+	/**
+	 * call PDO->rollback()
+	 * Rollback transaction started with start_transaction
+	 *
+	 * @return boolean true on success
+	 */
+	public function rollback(): bool
+	{
+		$pdo = $this->connect(false); //write connection
+		return $pdo->rollback();
+	}
+
+	/**
+	 * call PDO->exec. 
+	 *
+	 * @param string $query
+	 * @param boolean $use_read_connection
+	 * @return integer|false number of effected rows. or false on failure.
+	 */
+	public function exec(string $query): int
+	{
+		$pdo = $this->connect(false);	//write connection
+		return $pdo->exec($query);
+	}
+
+	/**
+	 * call PDO->prepare
+	 *
+	 * @param string $query
+	 * @param boolean $use_read_connection, default to use read connection
+	 * @param array $driver_options
+	 * @return PDOStatement
+	 */
+	public function prepare(string $query, bool $use_read_connection=true, array $driver_options=[]) :PDOStatement
+	{
+		$pdo = $this->connect($use_read_connection);
+		return $pdo->prepare($query, $driver_options);
+	}
+
+	/**
+	 * Get PDO instance
+	 *
+	 * @param boolean $read_connection
+	 * @return PDO
+	 */
+	public function get_connection(bool $read_connection = true) 
+	{
+		return $this->connect($read_connection);
+	}
+
+
+
+	protected function run_query(string $query, array $params=[], bool $use_read_connection=true)
+	{
+		$pdo = $this->connect($use_read_connection);
 		$statement = $this->run($pdo, $query, $params);
 		if(!empty($statement)) {
 			if(empty($this->fetch_class)) {
@@ -208,25 +381,25 @@ class Core
 				return $statement->fetchAll(PDO::FETCH_CLASS | PDO::FETCH_PROPS_LATE, $fetch_class, $fetch_class_params);
 			}
 		} else {
-			return [];
+			return null;
 		}
 	}
 
-	protected function connect(bool $to_read = true) 
+	protected function connect(bool $to_read = true) :PDO
 	{
-		static $read_connection = null;
+		static $use_read_connection = null;
 		static $write_connection = null;
 
 		if($to_read) {
-			if(isset($read_connection)) {
-				return $read_connection;
+			if(isset($use_read_connection)) {
+				return $use_read_connection;
 			}
-			$settings = $this->read_db_creds;
+			$settings = $this->read_creds;
 		} else {
 			if(isset($write_connection)) {
 				return $write_connection;
 			}
-			$settings = $this->write_db_creds;		
+			$settings = $this->write_creds;		
 		}
 
 		if(empty($settings)) {
@@ -237,7 +410,7 @@ class Core
 		$connection = new PDO($settings['dsn'], $settings['user'], $settings['password'], $settings['options']);
 
 		if($to_read) {
-			$read_connection = $connection;
+			$use_read_connection = $connection;
 		} else {
 			$write_connection = $connection;
 		}
@@ -248,8 +421,7 @@ class Core
 	protected function call_error_handler(string $error, int $code, string $file, int $line) 
 	{
 		$message = "File: $file Line: $line\tMessage: $error";
-		if($this->handler) {
-			
+		if($this->handler) {			
 			call_user_func($this->error_handler, "Code: $code\t" . $message);
 		} else {
 			throw new \RuntimeException($message, $code); 
@@ -282,14 +454,14 @@ class Core
 		}		
 	}
 
-	protected function run_insert_query(string $query, array $params = []) : string
+	protected function run_insert_query(string $query, array $params=[]) : string
 	{
 		$pdo = $this->connect(false);
 		$statement = $this->run($pdo, $query, $params);
 		if(!empty($statement)) {
 			return $pdo->lastInsertId();
 		} else {
-			return '';
+			return null;
 		}
 	}
 	
@@ -323,7 +495,7 @@ class Core
 		return (array_keys($subject_array) === range(0, count($subject_array) - 1));
 	}
 
-	protected function create_select_field_list($fields = []) : string
+	protected function build_select_field_list($fields=[]) :string
 	{
 		if (empty($fields)) {
 			return '*';
@@ -333,30 +505,30 @@ class Core
 			return implode(',', $fields);
 		}
 		
-		return $fields;
+		return $fields;	//string just return itself
 	}
 
-	protected function create_where_clause($where_clause = []) : string
+	protected function build_update_field_list(array &$data) :string
 	{
-		if(empty($where_clause)) {
-			return '';
+		$fields = [];
+		foreach ($data as $key=>$value) {
+			if($value === null) {
+				$fields[] = "`$key` = NULL ";
+				unset($data[$key]);
+			}else{
+				$fields[] = "`$key` = :" . Filter::alpha_numeric($key,'','_');
+			}
 		}
 
-		if(!is_array($where_clause)) {
-			$where_clause = [$where_clause];
-		}
-
-		$result = [];
-		foreach($where_clause as $clause) {
-			$result[] = (string) $clause;
-		}
-
-		return 'WHERE ' . implode(' AND ', $result);
+		return implode(',', $fields);
 	}
 
-	protected function make_partial_query($where = [],string $group_by = '',string $order_by = '', int $limit = 0, int $offset = 0)
+
+	protected function build_partial_query(string $where='', string $group_by='', string $order_by='', int $limit=0, int $offset=0)
 	{
-		$where = $this->create_where_clause($where);
+		if(!empty($where)) {
+			$where = 'WHERE ' . $where;
+		}
 		
 		if(!empty($group_by)) {
 			$group_by = 'GROUP BY ' . $group_by;
@@ -375,9 +547,18 @@ class Core
 		return " $where $group_by $order_by $limit";
 	}
 
-	protected function make_select_query($table, $fields = [], $where = [],string $group_by = '',string $order_by = '', int $limit = 0, int $offset = 0)
+	protected function build_select_query(string $table, $fields=[], $where='', string $group_by='', string $order_by='', int $limit=1, int $offset=0)
 	{
-		$select = $this->create_select_field_list($fields);
-		return "SELECT $select FROM $table " . $this->make_partial_query($where, $group_by, $order_by, $limit, $offset);
+		$select = $this->build_select_field_list($fields);
+		return "SELECT $select FROM $table " . $this->build_partial_query($where, $group_by, $order_by, $limit, $offset);
+	}
+
+	protected function remote_forbidden_fields(array &$data, array $allowed)
+	{
+		foreach ($data as $key => $value) {
+			if (!in_array($key, $allowed)) {
+				unset($data[$key]);	
+			}
+		}
 	}
 }

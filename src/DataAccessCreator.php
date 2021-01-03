@@ -3,7 +3,7 @@ namespace Jahan\Database;
 
 use Jahan\Filter\Str as StrFilter;
 
-class ClassFromTableCreator
+class DataAccessCreator
 {
 	public function __construct(Core $db, string $folder = 'tables/', string $namespace = '', string $base_class = '\Jahan\Database\DataAccessBase')
 	{
