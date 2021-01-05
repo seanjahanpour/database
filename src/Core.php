@@ -75,7 +75,7 @@ class Core
 	 */
 	public function get_row(string $table, $fields, string $where='',array $params=[], string $group_by='', string $order_by='', int $offset=0)
 	{
-		$records = $this->get_records($table, $fields, $where, $params, $group_by, $order_by, 1, $offset);
+		$records = $this->get_rows($table, $fields, $where, $params, $group_by, $order_by, 1, $offset);
 
 		if (!empty($records)) {
 			return $records[0];
@@ -123,7 +123,7 @@ class Core
 	{
 		$select_field = $this->build_select_field_list($field);
 		$select_field .= ' AS value';
-		$record = $this->get_record($table, $field, $where, $params, $group_by, $order_by, $offset);
+		$record = $this->get_row($table, $select_field, $where, $params, $group_by, $order_by, $offset);
 		
 		if(!empty($record)) {
 			if(is_array($record)) {

@@ -1,0 +1,24 @@
+<?php 
+
+return [
+	'object'=>[
+		'user'	=> 'test',
+		'password' => 'k:bxY5t+PQW]3;Jb',
+		'dsn' => 'mysql:host=localhost;dbname=test;charset=utf8mb4',
+		'options' => [ 
+			\PDO::ATTR_DEFAULT_FETCH_MODE => \PDO::FETCH_OBJ,
+			\PDO::ATTR_EMULATE_PREPARES => false,
+			\PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION,
+		],
+	],
+	'associate_array'=>[
+		'user'	=> 'test',
+		'password' => 'k:bxY5t+PQW]3;Jb',
+		'dsn' => 'mysql:host=localhost;dbname=test;charset=utf8mb4',
+		'options' => [ 
+			\PDO::ATTR_DEFAULT_FETCH_MODE => \PDO::FETCH_ASSOC,
+			\PDO::ATTR_EMULATE_PREPARES => false,
+			\PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION,
+		],
+	]
+];
