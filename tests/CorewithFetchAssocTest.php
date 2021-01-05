@@ -6,11 +6,9 @@ use Exception;
 use Jahan\Database\Core;
 use stdClass;
 
-use function PHPUnit\Framework\assertEquals;
-
-final class TestCore extends BaseCase
+final class CorewithFetchAssocTest extends BaseCase
 {
-	protected static ?Core $core;
+	private static ?Core $core;
 
 	public function setup(): void
 	{
@@ -19,8 +17,8 @@ final class TestCore extends BaseCase
 	public static function setUpBeforeClass(): void
 	{
 		$database_creds = include 'db_creds.php';
-		self::$core = new Core($database_creds['object'], $database_creds['object'], function($error) {
-			throw new \Exception($error);
+		self::$core = new Core($database_creds['fetch_assoc'], $database_creds['fetch_assoc'], function($error) {
+			throw new Exception($error);
 		});
 
 		$query = "DROP TABLE IF EXISTS coreTest";
@@ -54,40 +52,40 @@ final class TestCore extends BaseCase
 		$query = "SELECT col1, col2 FROM coreTest WHERE id=:id";
 		$result = self::$core->get_record($query, ['id'=>2]);
 
-		$obj = new stdClass;
-		$obj->col1 = 'row2';
-		$obj->col2 = 2;
+		$arr = [];
+		$arr['col1'] = 'row2';
+		$arr['col2'] = 2;
 
-		$this->assertEquals($obj, $result);
+		$this->assertEquals($arr, $result);
 
 
 		//test without params
 		$query = "SELECT col1, col2 FROM coreTest WHERE id = 2";
 		$result = self::$core->get_record($query);
 
-		$this->assertEquals($obj, $result);
+		$this->assertEquals($arr, $result);
 	}
 
 	public function test_get_row()
 	{
 		$result = self::$core->get_row('coreTest', ['col1', 'col2'], 'id=:id',['id'=>2]);
 
-		$obj = new stdClass;
-		$obj->col1 = 'row2';
-		$obj->col2 = 2;
+		$arr = [];
+		$arr['col1']= 'row2';
+		$arr['col2']= 2;
 
-		$this->assertEquals($obj, $result);
+		$this->assertEquals($arr, $result);
 
 
 		//test sort
 		$result = self::$core->get_row('coreTest', ['col1','col2'], '', [], '', 'col1 DESC');
 
-		$this->assertEquals($obj, $result);
+		$this->assertEquals($arr, $result);
 
 		//test offset
 		$result = self::$core->get_row('coreTest', ['col1','col2'], '', [], '', 'col1 ASC', 1);
 
-		$this->assertEquals($obj, $result);
+		$this->assertEquals($arr, $result);
 	}
 
 	public function test_get_value()
@@ -118,15 +116,15 @@ final class TestCore extends BaseCase
 		$result = self::$core->get_list($query, ['one'=>1]);
 
 		$data = [];
-		$obj1 = new stdClass();
-		$obj1->col1 = 'row1';
-		$obj1->col2 = 1;
-		$data[] = $obj1;
+		$arr1 = [];
+		$arr1['col1'] = 'row1';
+		$arr1['col2'] = 1;
+		$data[] = $arr1;
 
-		$obj2 = new stdClass();
-		$obj2->col1 = 'row2';
-		$obj2->col2 = 2;
-		$data[] = $obj2;
+		$arr2 = [];
+		$arr2['col1'] = 'row2';
+		$arr2['col2'] = 2;
+		$data[] = $arr2;
 
 		$this->assertEquals($data, $result);
 
@@ -143,15 +141,15 @@ final class TestCore extends BaseCase
 		$result = self::$core->get_rows('coreTest', ['col1', 'col2'], '1 = :one', ['one'=>1]);
 
 		$data = [];
-		$obj1 = new stdClass();
-		$obj1->col1 = 'row1';
-		$obj1->col2 = 1;
-		$data[] = $obj1;
+		$arr1 = [];
+		$arr1['col1'] = 'row1';
+		$arr1['col2'] = 1;
+		$data[] = $arr1;
 
-		$obj2 = new stdClass();
-		$obj2->col1 = 'row2';
-		$obj2->col2 = 2;
-		$data[] = $obj2;
+		$arr2 = [];
+		$arr2['col1'] = 'row2';
+		$arr2['col2'] = 2;
+		$data[] = $arr2;
 
 		$this->assertEquals($data, $result);	
 	}
@@ -271,27 +269,27 @@ final class TestCore extends BaseCase
 
 	public function test_set_class()
 	{
-		$result = self::$core->set_class(CoreTestSetClassTest::class,[10])
+		$result = self::$core->set_class(CoreTestSetClassClass::class,[10])
 				->get_record("SELECT id, col1, col2 FROM coreTest LIMIT 1");
 
-		$obj = new CoreTestSetClassTest(10);
+		$obj = new CoreTestSetClassClass(10);
 		$obj->id = 1;
 		$obj->col1 = 'row1';
 		$obj->col2 = 1;
 
-		$obj2 = new stdClass();	//result shouldn't be a standard stdClass
-		$obj2->id = 1;
-		$obj2->col1 = 'row1';
-		$obj2->col2 = 1;
+		$arr = [];	//result shouldn't be a array returning
+		$arr['id'] = 1;
+		$arr['col1'] = 'row1';
+		$arr['col2'] = 1;
 
 		$this->assertEquals($obj, $result);
-		$this->assertNotEquals($obj2, $result);
+		$this->assertNotEquals($arr, $result);
 
 		//second run should have removed the class
 		$result = self::$core->get_record("SELECT id, col1, col2 FROM coreTest LIMIT 1");
 		
 		$this->assertNotEquals($obj, $result);
-		$this->assertEquals($obj2, $result);
+		$this->assertEquals($arr, $result);
 	}
 
 	public function test_start_transaction_and_commit_transaction()
@@ -336,23 +334,5 @@ final class TestCore extends BaseCase
 	public static function tearDownAfterClass(): void
 	{
 		self::$core = null;
-	}
-}
-
-
-class CoreTestSetClassTest
-{
-	public int $id;
-	public string $col1;
-	public int $col2;
-	public string $updated_at;
-	public string $inserted_at;
-	public string $deleted_at;
-
-	public function __construct($var1)
-	{
-		if(empty($var1)) {
-			throw new Exception();
-		}
 	}
 }

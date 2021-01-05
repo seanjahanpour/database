@@ -1,7 +1,7 @@
 <?php 
 
 return [
-	'object'=>[
+	'fetch_obj'=>[
 		'user'	=> 'test',
 		'password' => 'k:bxY5t+PQW]3;Jb',
 		'dsn' => 'mysql:host=localhost;dbname=test;charset=utf8mb4',
@@ -11,7 +11,7 @@ return [
 			\PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION,
 		],
 	],
-	'associate_array'=>[
+	'fetch_assoc'=>[
 		'user'	=> 'test',
 		'password' => 'k:bxY5t+PQW]3;Jb',
 		'dsn' => 'mysql:host=localhost;dbname=test;charset=utf8mb4',

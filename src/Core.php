@@ -15,6 +15,8 @@ class Core
 	protected const ERROR_CODE = 2;
 	protected string $fetch_class = '';
 	protected array $fetch_class_params = [];
+	protected ?PDO $read_connection = null;
+	protected ?PDO $write_connection = null;
 
 	/**
 	 * @param array $read_creds 
@@ -387,17 +389,14 @@ class Core
 
 	protected function connect(bool $to_read = true) :PDO
 	{
-		static $use_read_connection = null;
-		static $write_connection = null;
-
 		if($to_read) {
-			if(isset($use_read_connection)) {
-				return $use_read_connection;
+			if(isset($this->read_connection)) {
+				return $this->read_connection;
 			}
 			$settings = $this->read_creds;
 		} else {
-			if(isset($write_connection)) {
-				return $write_connection;
+			if(isset($this->write_connection)) {
+				return $this->write_connection;
 			}
 			$settings = $this->write_creds;		
 		}
@@ -410,9 +409,9 @@ class Core
 		$connection = new PDO($settings['dsn'], $settings['user'], $settings['password'], $settings['options']);
 
 		if($to_read) {
-			$use_read_connection = $connection;
+			$this->read_connection = $connection;
 		} else {
-			$write_connection = $connection;
+			$this->write_connection = $connection;
 		}
 
 		return $connection;
