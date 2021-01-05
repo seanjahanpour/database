@@ -172,7 +172,7 @@ class Core
 	 * @param string $where where clause
 	 * @param array $params parameters for where clause if needed.
 	 * @param array $allowed list of allowed fields to be updated. Any field in $data that is not in this list will be removed. If $allowed is not passed or empty array is passed, all fields will be allowed.
-	 * @return ?integer number of rows effected or null on failure
+	 * @return ?integer number of rows affected or null on failure
 	 */
 	public function update(string $table, array $data, string $where, array $params=[], array $allowed=[]) :int
 	{
@@ -246,7 +246,7 @@ class Core
 	 *
 	 * @param string $query
 	 * @param array $params
-	 * @return integer returns number of rows effected
+	 * @return integer returns number of rows affected
 	 */
 	public function update_record(string $query, array $params=[]) : int
 	{
@@ -270,7 +270,7 @@ class Core
 	 *
 	 * @param string $query
 	 * @param array $params
-	 * @return integer returns number of rows effected
+	 * @return integer returns number of rows affected
 	 */
 	public function delete_record(string $query, array $params=[]) :int
 	{
@@ -333,7 +333,7 @@ class Core
 	 *
 	 * @param string $query
 	 * @param boolean $use_read_connection
-	 * @return integer|false number of effected rows. or false on failure.
+	 * @return integer|false number of affected rows. or false on failure.
 	 */
 	public function exec(string $query): int
 	{
