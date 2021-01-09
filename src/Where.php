@@ -1,20 +1,26 @@
 <?php
 namespace Jahan\Database;
 
+/**
+ * This is a helper class to create where clause for MySql queries.
+ * Usage:
+ * echo new \Jahan\Database\Where('id','=',10); //id = 10
+ * echo \Jahan\Database\Where::build('deleted_at', 'IS NOT NULL'); //deleted_at IS NOT NULL
+ */
 class Where
 {
 	public $field;
 	public $operator;
 	public $value;
 
-	public function __construct($field, $operator, $value)
+	public function __construct($field, $operator, $value = '')
 	{
 		$this->field = $field;
 		$this->operator = $operator;
 		$this->value = $value;
 	}
 
-	public static function build($field, $operator, $value) :string
+	public static function build($field, $operator, $value = '') :string
 	{
 		$obj = new Where($field, $operator, $value);
 		return (string) $obj;
@@ -24,6 +30,12 @@ class Where
 	{
 		$operator = strtoupper($this->operator);
 		$result = (string) $this->field . ' ' . $operator;
+
+		if(is_string($this->value)) {
+			if(!empty($this->value) && $this->value[0] != ':') {
+				$this->value = '"' . $this->value . '"';
+			}
+		}
 
 		switch($operator) {
 			case '>':
