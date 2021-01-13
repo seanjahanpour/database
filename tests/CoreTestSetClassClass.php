@@ -13,7 +13,7 @@ class CoreTestSetClassClass
 	public function __construct($var1)
 	{
 		if(empty($var1)) {
-			throw new Exception();
+			throw new \Exception();
 		}
 	}
 }
