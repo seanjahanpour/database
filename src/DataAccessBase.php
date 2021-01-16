@@ -71,11 +71,12 @@ class DataAccessBase
 		$table = static::TABLE;
 		$pk_field_name = static::PK;
 
-		$instance = $db->set_class(static::class, [$db])->get_record($table, $pk_field_name, $id, $fields);
+		$instance = $db->set_class(static::class, [$db])->get_row($table, $fields, "$pk_field_name = :pk", ['pk'=>$id]);
+
+		//clean up lazy loads, incase we are loading to override previous pull from database.
 		foreach(static::LAZY_LOAD_FIELDS as $field) {
 			unset($instance->$field);
 		}
-
 		$instance->lazy_load_changed = [];
 
 		$instance->loaded_from_db = true;
