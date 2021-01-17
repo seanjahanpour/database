@@ -3,6 +3,11 @@ namespace Jahan\Database;
 
 use Jahan\Filter\Str as StrFilter;
 
+/**
+ * DataAccessCreator generates classes representing all the fields and details of all tables in the database.
+ * One class per table is created.
+ */
+
 class DataAccessCreator
 {
 	public function __construct(Core $db, string $folder = 'tables/', string $namespace = '', string $base_class = '\Jahan\Database\DataAccessBase')
@@ -263,6 +268,7 @@ class DataAccessCreator
 					$content .= "	{" . PHP_EOL;					
 					$content .= "		switch(\$property) {" . PHP_EOL;
 								
+					$date_time_fields = [];
 					foreach($need_setter as $field) {
 						if($field['type'] == 'DateTime') {
 							$date_time_fields[] = $field;
