@@ -275,8 +275,12 @@ class DataAccessCreator
 							$content .= "				}" . PHP_EOL;
 							$content .= "				break;" . PHP_EOL;
 						} elseif($field['type'] == 'auto_increment') {
-							//read only field. Not setter needed.
-							continue;
+							//read only field. Only set when not loaded from database.
+							$content .= "			case '{$field['name']}':" . PHP_EOL;
+							$content .= "				if( !\$this->loaded_from_db ) {" . PHP_EOL;
+							$content .= "					\$this->_{$field['name']} = \$value;" . PHP_EOL;
+							$content .= "				}" . PHP_EOL;
+							$content .= "				break;" . PHP_EOL;
 						} else {
 							$content .= "			case '{$field['name']}':" . PHP_EOL;
 							$content .= "				\$this->_{$field['name']} = \$value;" . PHP_EOL;
