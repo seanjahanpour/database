@@ -36,6 +36,8 @@ class DataAccessCreator
 					<?php
 					namespace $namespace;
 
+					use \Jahan\Database\DateTime;
+
 					class $class_name $base_class
 					{
 						public const TABLE = '$table';
@@ -72,7 +74,7 @@ class DataAccessCreator
 						$primary_key = $field_info['Field'];
 						if(stripos($field_info['Extra'], 'auto_increment') !== false) {
 							$updateable = false;
-							//$need_setter[] = ['type'=>'', 'name'=> StrFilter::alpha_numeric($field_info['Field'], [], '_')];
+							$need_setter[] = ['type'=>'auto_increment', 'name'=> StrFilter::alpha_numeric($field_info['Field'], [], '_')];
 						}	
 					}
 
@@ -130,9 +132,9 @@ class DataAccessCreator
 								$updateable = false;
 							}
 							
-							$need_setter[] = ['type'=>'\DateTime', 'name'=> StrFilter::alpha_numeric($field_info['Field'], [], '_')];
+							$need_setter[] = ['type'=>'DateTime', 'name'=> StrFilter::alpha_numeric($field_info['Field'], [], '_')];
 
-							$var_type .= '\DateTime';
+							$var_type .= 'DateTime';
 							
 							break;
 						case 'date':
@@ -262,9 +264,9 @@ class DataAccessCreator
 					$content .= "		switch(\$property) {" . PHP_EOL;
 								
 					foreach($need_setter as $field) {
-						if($field['type'] == '\DateTime') {
+						if($field['type'] == 'DateTime') {
 							$date_time_fields[] = $field;
-						} elseif ($field['type'] == 'enum') {
+						} elseif($field['type'] == 'enum') {
 							$content .= "			case '{$field['name']}':" . PHP_EOL;
 							$content .= "				if( in_array(\$value, ['" . implode("','",$field['values']) . "']) ) {" . PHP_EOL;
 							$content .= "					\$this->_{$field['name']} = \$value;" . PHP_EOL;
@@ -272,6 +274,9 @@ class DataAccessCreator
 							$content .= "					throw new \InvalidArgumentException('Invalid value for {$field['name']}');" . PHP_EOL;
 							$content .= "				}" . PHP_EOL;
 							$content .= "				break;" . PHP_EOL;
+						} elseif($field['type'] == 'auto_increment') {
+							//read only field. Not setter needed.
+							continue;
 						} else {
 							$content .= "			case '{$field['name']}':" . PHP_EOL;
 							$content .= "				\$this->_{$field['name']} = \$value;" . PHP_EOL;
@@ -286,7 +291,7 @@ class DataAccessCreator
 						$content .= "				if(\$value === null) {" . PHP_EOL;
 						$content .= "					\$this->\$property = null;" . PHP_EOL;
 						$content .= "				} else {" . PHP_EOL;
-						$content .= "					\$this->\$property = new \DateTime(\$value);" . PHP_EOL;
+						$content .= "					\$this->\$property = new DateTime(\$value);" . PHP_EOL;
 						$content .= "				}" . PHP_EOL;
 						$content .= "				break;" . PHP_EOL;
 					}
@@ -296,23 +301,25 @@ class DataAccessCreator
 					
 					$content .= "		}" . PHP_EOL;
 					$content .= "	}" . PHP_EOL;
+
+					$content .= "	public function __get(\$property)" . PHP_EOL;
+					$content .= "	{" . PHP_EOL;
+	
+					$content .= "		switch(\$property) {" . PHP_EOL;				
+					
+					if(!empty($need_setter)) foreach($need_setter as $field) {					
+						$content .= "			case '{$field['name']}':" . PHP_EOL;
+					}
+					$content .= "				\$property = '_' . \$property;" . PHP_EOL;
+					$content .= "				return \$this->\$property;" . PHP_EOL;
+					$content .= "				break;" . PHP_EOL;
+					$content .= "			default:" . PHP_EOL;
+					$content .= "				return parent::__get(\$property);" . PHP_EOL;
+					$content .= "		}" . PHP_EOL;
+					$content .= "	}" . PHP_EOL;	
 				}
 
-				$content .= "	public function __get(\$property)" . PHP_EOL;
-				$content .= "	{" . PHP_EOL;
 
-				$content .= "		switch(\$property) {" . PHP_EOL;				
-				
-				if(!empty($need_setter)) foreach($need_setter as $field) {					
-					$content .= "			case '{$field['name']}':" . PHP_EOL;
-				}
-				$content .= "				\$property = '_' . \$property;" . PHP_EOL;
-				$content .= "				return \$this->\$property;" . PHP_EOL;
-				
-				$content .= "			default:" . PHP_EOL;
-				$content .= "				return parent::__get(\$property);" . PHP_EOL;
-				$content .= "		}" . PHP_EOL;
-				$content .= "	}" . PHP_EOL;
 
 				$content .= '}';
 

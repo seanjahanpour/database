@@ -84,9 +84,68 @@ class DataAccessBase
 		return $instance;
 	}
 
+	public function save()
+	{
+		$field_values = [];
+
+		foreach(static::FIELDS as $field) {
+			if(  in_array($field, static::LAZY_LOAD_FIELDS) &&  !in_array($field, $this->lazy_load_changed)  ) {
+				//skip all lazy load fields that haven't loaded or changed.
+				continue;
+			}
+
+			if(  is_object($this->$field)  ) {
+				$field_values[$field] = (string) $this->$field;
+			} else {
+				$field_values[$field] = $this->$field;
+			}
+		}
+
+		$pk = static::PK;
+
+		$this->db->update(static::TABLE, $field_values, "$pk = :pk", ['pk'=>$this->$pk]);
+	}
+
 	public function __debugInfo()
 	{
 		unset($this->db);
 		return get_object_vars($this);
+	}
+
+	protected function save_fields(array $fields)
+	{
+		$field_values = [];
+
+		foreach($fields as $field) {
+			if(  in_array($field, static::LAZY_LOAD_FIELDS) &&  !in_array($field, $this->lazy_load_changed)  ) {
+				//skip all lazy load fields that haven't loaded or changed.
+				continue;
+			}
+
+			$field_values[$field] = $this->$field;
+		}
+
+		$pk = static::PK;
+
+		if($this->loaded_from_db) {
+			return $this->db->update(static::TABLE, $field_values, "$pk = :pk", ['pk'=>$this->$pk]);
+		} else {
+			return $this->db->insert(static::TABLE, $field_values);
+		}
+	}
+
+	protected function get_fields_for_saving()
+	{
+		return static::FIELDS;
+	}
+
+	protected function get_fields_for_update()
+	{
+		return static::UPDATABLES;
+	}
+
+	protected function get_fields_for_insert()
+	{
+		return static::INSERTABLES;
 	}
 }
