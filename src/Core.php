@@ -13,7 +13,7 @@ class Core
 	protected array $write_creds;
 	protected array $read_creds;
 	protected const ERROR_CODE = 2;
-	protected string $fetch_class = '';
+	protected $fetch_class_or_object = '';
 	protected array $fetch_class_params = [];
 	protected ?PDO $read_connection = null;
 	protected ?PDO $write_connection = null;
@@ -286,8 +286,20 @@ class Core
 	 */
 	public function set_class(string $class, array $params=[])
 	{
-		$this->fetch_class = $class;
+		$this->fetch_class_or_object = $class;
 		$this->fetch_class_params = $params;
+		return $this;
+	}
+ 
+	/**
+	 * Set object to load query result into.
+	 * 
+	 * @param object $object
+	 * @return $this
+	 */
+	public function set_object(object $obj) {
+		$this->fetch_class_or_object = $obj;
+		$this->fetch_class_params = [];
 		return $this;
 	}
 
@@ -373,14 +385,21 @@ class Core
 		$pdo = $this->connect($use_read_connection);
 		$statement = $this->run($pdo, $query, $params);
 		if(!empty($statement)) {
-			if(empty($this->fetch_class)) {
+			if(empty($this->fetch_class_or_object)) {
 				return $statement->fetchAll();
 			} else {
-				$fetch_class = $this->fetch_class;
+				$fetch_class = $this->fetch_class_or_object;
 				$fetch_class_params = $this->fetch_class_params;
-				$this->fetch_class = '';
+				$this->fetch_class_or_object = '';
 				$this->fetch_class_params = [];
-				return $statement->fetchAll(PDO::FETCH_CLASS | PDO::FETCH_PROPS_LATE, $fetch_class, $fetch_class_params);
+
+				if(is_object($fetch_class)) {
+					$statement->setFetchMode(PDO::FETCH_INTO, $fetch_class);
+					$result = $statement->fetch();
+					return [$result];
+				} else {
+					return $statement->fetchAll(PDO::FETCH_CLASS | PDO::FETCH_PROPS_LATE, $fetch_class, $fetch_class_params);
+				}
 			}
 		} else {
 			return null;

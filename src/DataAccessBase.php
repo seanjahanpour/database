@@ -55,18 +55,9 @@ class DataAccessBase
 		return $this;
 	}
 
-
-	public static function load($id, Core $db)
+	public static function create($id, Core $db)
 	{
-		//get list of fields in this table
-		$fields = static::FIELDS;
-
-		//remove all lazy loading fields
-		foreach($fields as $key=>$field) {
-			if(in_array($field, static::LAZY_LOAD_FIELDS)) {
-				unset($fields[$key]);
-			}
-		}
+		$fields = static::get_all_fields_except_lazy_load();
 
 		$table = static::TABLE;
 		$pk_field_name = static::PK;
@@ -77,33 +68,46 @@ class DataAccessBase
 		foreach(static::LAZY_LOAD_FIELDS as $field) {
 			unset($instance->$field);
 		}
+		
 		$instance->lazy_load_changed = [];
-
 		$instance->loaded_from_db = true;
 		
 		return $instance;
 	}
 
+	public function load()
+	{
+		$fields = static::get_all_fields_except_lazy_load();
+
+		$table = static::TABLE;
+		$pk_field_name = static::PK;
+
+		$this->db->set_object($this)->get_row($table, $fields, "$pk_field_name = :pk", ['pk'=>$this->$pk_field_name]);
+
+		//clean up lazy loads, incase we are loading to override previous pull from database.
+		foreach(static::LAZY_LOAD_FIELDS as $field) {
+			unset($this->$field);
+		}
+		
+		$this->lazy_load_changed = [];
+		$this->loaded_from_db = true;
+		
+		return $this;
+	}
+
 	public function save()
 	{
-		$field_values = [];
+		return $this->save_fields(static::FIELDS);
+	}
 
-		foreach(static::FIELDS as $field) {
-			if(  in_array($field, static::LAZY_LOAD_FIELDS) &&  !in_array($field, $this->lazy_load_changed)  ) {
-				//skip all lazy load fields that haven't loaded or changed.
-				continue;
-			}
+	public function update()
+	{
+		return $this->save_fields(static::UPDATABLES);
+	}
 
-			if(  is_object($this->$field)  ) {
-				$field_values[$field] = (string) $this->$field;
-			} else {
-				$field_values[$field] = $this->$field;
-			}
-		}
-
-		$pk = static::PK;
-
-		$this->db->update(static::TABLE, $field_values, "$pk = :pk", ['pk'=>$this->$pk]);
+	public function insert()
+	{
+		return $this->save_fields(static::INSERTABLES);
 	}
 
 	public function __debugInfo()
@@ -112,6 +116,20 @@ class DataAccessBase
 		return get_object_vars($this);
 	}
 
+	protected static function get_all_fields_except_lazy_load()
+	{
+		$fields = static::FIELDS;
+
+		//remove all lazy loading fields
+		foreach($fields as $key=>$field) {
+			if(in_array($field, static::LAZY_LOAD_FIELDS)) {
+				unset($fields[$key]);
+			}
+		}
+
+		return $fields;
+	}
+	
 	protected function save_fields(array $fields)
 	{
 		$field_values = [];
@@ -122,7 +140,11 @@ class DataAccessBase
 				continue;
 			}
 
-			$field_values[$field] = $this->$field;
+			if(  is_object($this->$field)  ) {
+				$field_values[$field] = (string) $this->$field;
+			} else {
+				$field_values[$field] = $this->$field;
+			}
 		}
 
 		$pk = static::PK;

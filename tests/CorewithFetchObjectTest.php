@@ -292,6 +292,34 @@ final class CorewithFetchObjectTest extends BaseCase
 		$this->assertEquals($obj2, $result);
 	}
 
+	public function test_set_object()
+	{
+		$object = new CoreTestSetClassClass(10);
+
+		$result = self::$core->set_object($object)
+				->get_record("SELECT id, col1, col2 FROM coreTest LIMIT 1");
+		
+		$obj = new CoreTestSetClassClass(10);
+		$obj->id = 1;
+		$obj->col1 = 'row1';
+		$obj->col2 = 1;
+
+		$obj2 = new stdClass();	//result shouldn't be a standard stdClass
+		$obj2->id = 1;
+		$obj2->col1 = 'row1';
+		$obj2->col2 = 1;
+
+		$this->assertEquals($obj, $object);
+		$this->assertSame($object, $result);
+		$this->assertNotEquals($obj2, $object);
+
+		//second run should have removed the object
+		$result = self::$core->get_record("SELECT id, col1, col2 FROM coreTest LIMIT 1");
+		
+		$this->assertNotEquals($obj, $result);
+		$this->assertEquals($obj2, $result);		
+	}
+
 	public function test_start_transaction_and_commit_transaction()
 	{
 		self::$core->start_transaction();
