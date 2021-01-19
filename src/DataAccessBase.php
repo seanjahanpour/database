@@ -1,7 +1,7 @@
 <?php
 namespace Jahan\Database;
 
-use Jahan\Filter\Str as Filter;
+use Jahan\Filter\Str as StrFilter;
 
 class DataAccessBase
 {
@@ -16,13 +16,13 @@ class DataAccessBase
 	public const FIELD_PROPERTIES = [];
 	public array $lazy_load_changed = [];
 
-	protected bool $loaded_from_db = false;
+	protected bool $_loaded_from_db_ = false;
 
-	protected Core $db;
+	protected Core $_db_;
 
 	public function __construct(Core $db)
 	{
-		$this->db = $db;
+		$this->_db_ = $db;
 	}
 
 	public function __set($property, $value)
@@ -46,12 +46,16 @@ class DataAccessBase
 
 	public function load_field(string $field_name)
 	{
-		$field_name = Filter::alpha_numeric($field_name, ['_']);
+		$field_name = StrFilter::alpha_numeric($field_name, ['_']);
 		$table = static::TABLE;
 		$pk_field_name = static::PK;
 		$pk = $this->$pk_field_name;
-		$query = "SELECT $field_name AS value FROM $table WHERE $pk_field_name = :pk LIMIT 1";
-		$this->$field_name = $this->db->get_value($query, ['pk'=>$pk]);
+
+		$pk_field_name = (empty(static::FIELD_PROPERTIES[$pk_field_name]['name'])) ? $pk_field_name : static::FIELD_PROPERTIES[$pk_field_name]['name'];
+		$field_name = (empty(static::FIELD_PROPERTIES[$field_name]['name'])) ? $field_name : static::FIELD_PROPERTIES[$field_name]['name'];
+
+		$query = "SELECT `$field_name` AS value FROM `$table` WHERE `$pk_field_name` = :pk LIMIT 1";
+		$this->$field_name = $this->_db_->get_value($query, ['pk'=>$pk]);
 		return $this;
 	}
 
@@ -61,8 +65,9 @@ class DataAccessBase
 
 		$table = static::TABLE;
 		$pk_field_name = static::PK;
+		$pk_field_name = (empty(static::FIELD_PROPERTIES[$pk_field_name]['name'])) ? $pk_field_name : static::FIELD_PROPERTIES[$pk_field_name]['name'];
 
-		$instance = $db->set_class(static::class, [$db])->get_row($table, $fields, "$pk_field_name = :pk", ['pk'=>$id]);
+		$instance = $db->set_class(static::class, [$db])->get_row($table, $fields, "`$pk_field_name` = :pk", ['pk'=>$id]);
 
 		//clean up lazy loads, incase we are loading to override previous pull from database.
 		foreach(static::LAZY_LOAD_FIELDS as $field) {
@@ -70,7 +75,7 @@ class DataAccessBase
 		}
 		
 		$instance->lazy_load_changed = [];
-		$instance->loaded_from_db = true;
+		$instance->_loaded_from_db_ = true;
 		
 		return $instance;
 	}
@@ -81,8 +86,10 @@ class DataAccessBase
 
 		$table = static::TABLE;
 		$pk_field_name = static::PK;
+		$id = $this->$pk_field_name;
+		$pk_field_name = (empty(static::FIELD_PROPERTIES[$pk_field_name]['name'])) ? $pk_field_name : static::FIELD_PROPERTIES[$pk_field_name]['name'];
 
-		$this->db->set_object($this)->get_row($table, $fields, "$pk_field_name = :pk", ['pk'=>$this->$pk_field_name]);
+		$this->_db_->set_object($this)->get_row($table, $fields, "`$pk_field_name` = :pk", ['pk'=>$id]);
 
 		//clean up lazy loads, incase we are loading to override previous pull from database.
 		foreach(static::LAZY_LOAD_FIELDS as $field) {
@@ -90,7 +97,7 @@ class DataAccessBase
 		}
 		
 		$this->lazy_load_changed = [];
-		$this->loaded_from_db = true;
+		$this->_loaded_from_db_ = true;
 		
 		return $this;
 	}
@@ -112,7 +119,7 @@ class DataAccessBase
 
 	public function __debugInfo()
 	{
-		unset($this->db);
+		unset($this->_db_);
 		return get_object_vars($this);
 	}
 
@@ -124,7 +131,11 @@ class DataAccessBase
 		foreach($fields as $key=>$field) {
 			if(in_array($field, static::LAZY_LOAD_FIELDS)) {
 				unset($fields[$key]);
+				continue;
 			}
+
+			//get raw field name from FIELD_PROPERTIES if defined
+			$fields[$key] = (empty(static::FIELD_PROPERTIES[$field]['name'])) ? $field : static::FIELD_PROPERTIES[$field]['name'];
 		}
 
 		return $fields;
@@ -148,11 +159,19 @@ class DataAccessBase
 		}
 
 		$pk = static::PK;
+		$id = $this->$pk;
+		$pk = (empty(static::FIELD_PROPERTIES[$pk]['name'])) ? $pk : static::FIELD_PROPERTIES[$pk]['name'];
 
-		if($this->loaded_from_db) {
-			return $this->db->update(static::TABLE, $field_values, "$pk = :pk", ['pk'=>$this->$pk]);
+		$field_values_with_raw_columnname = [];
+		foreach($field_values as $key=>$value) {
+			$key = (empty(static::FIELD_PROPERTIES[$key]['name'])) ? $key : static::FIELD_PROPERTIES[$key]['name'];
+			$field_values_with_raw_columnname[$key] = $value;
+		}
+
+		if($this->_loaded_from_db_) {
+			return $this->_db_->update(static::TABLE, $field_values_with_raw_columnname, "`$pk` = :pk", ['pk'=>$id]);
 		} else {
-			return $this->db->insert(static::TABLE, $field_values);
+			return $this->_db_->insert(static::TABLE, $field_values_with_raw_columnname);
 		}
 	}
 

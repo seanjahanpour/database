@@ -41,7 +41,8 @@ class DataAccessCreator
 					<?php
 					namespace $namespace;
 
-					use \Jahan\Database\DateTime;
+					use Jahan\Database\DateTime;
+					use Jahan\Filter\Str as StrFilter;
 
 					class $class_name $base_class
 					{
@@ -71,15 +72,27 @@ class DataAccessCreator
 					$insertable = true;
 					$lazy_load = false;
 
+					$field_name = $field_info['Field'];
+					$field_name_raw = $field_name;
+
+					$field_name = StrFilter::alpha_numeric($field_name, [], '_');
+					$field_name_first_character = substr($field_name, 0, 1);
+					if($field_name_first_character == StrFilter::numbers_only($field_name_first_character, [])) {
+						//first character variable name cannot be a number in php.
+						$field_name = '_' . $field_name;
+					}
+					
+
 					$nullable = ($field_info['Null'] == 'YES') ? 'true' : 'false';
 
 					$default = ($field_info['Default'] === null && $nullable === 'true') ? 'null' : "'{$field_info['Default']}'";
+					$property_default = 'NOT SET';
 
 					if($field_info['Key'] == 'PRI') {
-						$primary_key = $field_info['Field'];
+						$primary_key = $field_name;
 						if(stripos($field_info['Extra'], 'auto_increment') !== false) {
 							$updateable = false;
-							$need_setter[] = ['type'=>'auto_increment', 'name'=> StrFilter::alpha_numeric($field_info['Field'], [], '_')];
+							$need_setter[] = ['type'=>'auto_increment', 'name'=> $field_name];
 						}	
 					}
 
@@ -106,6 +119,7 @@ class DataAccessCreator
 								$var_type .= 'bool';
 								if($default != 'null') {
 									$default = ($field_info['Default'] == '1') ? 'true' : 'false';
+									$property_default = $field_info['Default']; //0 or 1 for false or true
 								}
 								break;
 							}
@@ -127,17 +141,26 @@ class DataAccessCreator
 							break;
 						case 'timestamp':
 						case 'datetime':
+							if($default !== 'null') {
+								$default = '';
+								$property_default = $field_info['Default'];
+							}
+							
+
+
 							if(stripos($field_info['Default'],'CURRENT_TIMESTAMP') !== false) {
 								$insertable = false;
 								$updateable = false;
-								$default = '';
+								$property_default = 'CURRENT_TIMESTAMP()';
 							}
 							
-							if(stripos($field_info['Extra'], 'on update CURRENT_TIMESTAMP') !== false) {
+							if(stripos($field_info['Extra'], 'on update CURRENT_TIMESTAMP()') !== false) {
 								$updateable = false;
 							}
 							
-							$need_setter[] = ['type'=>'DateTime', 'name'=> StrFilter::alpha_numeric($field_info['Field'], [], '_')];
+							
+							
+							$need_setter[] = ['type'=>'DateTime', 'name'=> $field_name];
 
 							$var_type .= 'DateTime';
 							
@@ -155,7 +178,7 @@ class DataAccessCreator
 							$this_field_constants = [];
 
 							if(!empty($matches)) foreach($matches[1] as $match) {
-								$const = StrFilter::alpha_numeric($field_info['Field'], [], '_');
+								$const = $field_name;
 								if(!empty($match)) {
 									$m = StrFilter::alpha_numeric($match, [], '_');
 									$const = $const . '_' . $m;
@@ -165,13 +188,14 @@ class DataAccessCreator
 								$this_field_constants[$const] = $match;
 							}
 
-							$need_setter[] = ['type'=>'enum', 'name'=> StrFilter::alpha_numeric($field_info['Field'], [], '_'), 'values'=>$this_field_constants];
+							$need_setter[] = ['type'=>'enum', 'name'=> $field_name, 'values'=>$this_field_constants];
 							break;
 						default:
 							throw New \Exception("Unknow field $table.{$field_info['Type']} (looking for $type)");
 					}
 
-					$field = $field_info['Field'];
+					$property_default = ($property_default == 'NOT SET') ? $default : $property_default;
+					$field = $field_name;
 
 					if($lazy_load) {
 						$lazy_load_fields[] = $field;
@@ -186,7 +210,7 @@ class DataAccessCreator
 					}
 
 					$fields[] = ['field'=>$field,'type'=>$var_type,'default'=>$default];
-					$field_properties[] = ['field'=>$field,'type'=>$field_info['Type'], 'nullable'=>$nullable, 'default'=>$field_info['Default'], 'extra'=>$field_info['Extra']];
+					$field_properties[] = ['field'=>$field_name_raw,'type'=>$field_info['Type'], 'nullable'=>$nullable, 'default'=>$property_default, 'extra'=>$field_info['Extra']];
 				}
 
 				if(!empty($primary_key)) {
@@ -232,7 +256,14 @@ class DataAccessCreator
 
 					$content .= "	public const FIELD_PROPERTIES = [" . PHP_EOL;
 					foreach($field_properties as $field) {
-						$content .= "		'{$field['field']}' => ['type' => \"{$field['type']}\", 'nullable' => {$field['nullable']}, 'default' => \"{$field['default']}\", 'extra' => \"{$field['extra']}\"]," . PHP_EOL;
+						$field_name_tmp = StrFilter::alpha_numeric($field['field'], [], '_');
+						$field_name_tmp_first_character = substr($field_name_tmp, 0, 1);
+						if($field_name_tmp_first_character == StrFilter::numbers_only($field_name_tmp_first_character, [])) {
+							//first character variable name cannot be a number in php.
+							$field_name_tmp = '_' . $field_name_tmp;
+						}
+
+						$content .= "		'" . $field_name_tmp . "' => ['name' => '{$field['field']}', 'type' => \"{$field['type']}\", 'nullable' => {$field['nullable']}, 'default' => \"{$field['default']}\", 'extra' => \"{$field['extra']}\"]," . PHP_EOL;
 					}
 					$content .= "	];" . PHP_EOL . PHP_EOL;
 					
@@ -265,7 +296,9 @@ class DataAccessCreator
 				
 				if(!empty($need_setter)) {
 					$content .= "	public function __set(\$property, \$value)" . PHP_EOL;
-					$content .= "	{" . PHP_EOL;					
+					$content .= "	{" . PHP_EOL;
+					$content .= "		\$property = StrFilter::alpha_numeric(\$property, [], '_');" . PHP_EOL;
+					$content .= PHP_EOL;
 					$content .= "		switch(\$property) {" . PHP_EOL;
 								
 					$date_time_fields = [];

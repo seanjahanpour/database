@@ -520,10 +520,10 @@ class Core
 		} 
 		
 		if (is_array($fields)) {
-			return implode(',', $fields);
+			return "`" . implode('`,`', $fields) . "`";
 		}
 		
-		return $fields;	//string just return itself
+		return $fields;	//string is passed in $fields list, just return itself
 	}
 
 	protected function build_update_field_list(array &$data) :string
