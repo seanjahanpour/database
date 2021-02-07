@@ -4,7 +4,6 @@ namespace Test;
 
 use Exception;
 use Jahan\Database\Core;
-use stdClass;
 
 final class CorewithFetchAssocTest extends BaseCase
 {

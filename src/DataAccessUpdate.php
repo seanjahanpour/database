@@ -31,7 +31,12 @@ class DataAccessUpdate
 			//get table name from class
 			$table = $class_name::TABLE;
 
+			//create table if it doesn't exist
+			$db->exec("CREATE TABLE IF NOT EXISTS $table (id INT NOT NULL)");
+
 			//load table information
+
+
 			$table_info = $db->get_list("DESCRIBE `$table`");			
 			
 			$field_properties = [];
